@@ -17,7 +17,7 @@ package main
 
 import (
 	"fmt"
-	"src.nextbillion.io/shared/yog"
+	"github.com/nextbillion-ai/yog"
 )
 
 func main() {
@@ -46,7 +46,7 @@ package main
 
 import (
 	"fmt"
-	"src.nextbillion.io/shared/yog"
+	"github.com/nextibllion-ai/yog"
 )
 
 func main() {
