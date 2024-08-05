@@ -1,4 +1,4 @@
-module src.nextbillion.io/shared/yog
+module github.com/nextbillion-ai/yog
 
 go 1.21
 
