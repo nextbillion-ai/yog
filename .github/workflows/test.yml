@@ -1,0 +1,19 @@
+name: lint
+
+on:
+  push:
+    branches:
+      - "*" # Trigger the workflow on any branch push
+
+jobs:
+  test:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: lint and test
+        run: |
+          #!/bin/bash
+          golangci-lint run
+          go test ./...
