@@ -1,0 +1,49 @@
+# refer: https://golangci-lint.run/usage/configuration/
+run:
+  tests: false
+  timeout: 15m
+  skip-dirs:
+    - "pkg/mod/.*"
+    - "go/src/.*"
+output:
+  print-issued-lines: true
+  print-linter-name: true
+linters-settings:
+  cyclop:
+    # The maximal code complexity to report.
+    max-complexity: 20
+    # The maximal average package complexity.
+    # If it's higher than 0.0 (float) the check is enabled
+    package-average: 0.0
+    # Should ignore tests.
+    skip-tests: true
+linters:
+#  https://golangci-lint.run/usage/linters/
+  enable:
+    - asciicheck
+    - bodyclose
+    - cyclop
+  disable:
+    - gosimple
+    - unused
+issues:
+  exclude-rules:
+    # Exclude some linters from running on tests files.
+    - path: service/navigation.go
+      text: "TextInstruction"
+      linters:
+        - cyclop
+    - path: service/navigation.go
+      text: "DirectionFromDegree"
+      linters:
+        - cyclop
+    - path: service/navigation.go
+      text: "InsertArriveVoiceInstruction"
+      linters:
+        - cyclop
+    - path: service/navigation.go
+      text: "GenerateVoiceInstruction"
+      linters:
+        - cyclop
+severity:
+  option: value
