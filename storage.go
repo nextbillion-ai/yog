@@ -47,24 +47,19 @@ func (g *GSGClient) DownloadSingleFile(ctx context.Context, objectName string, p
 		return fmt.Errorf("os.Create: %w", err)
 	}
 
-	defer func(f *os.File) {
-		_ = f.Close()
-	}(f)
+	defer func() {
+		if err = f.Close(); err != nil {
+			err = fmt.Errorf("f.Close: %w", err)
+		}
+	}()
 
 	err = gsgObject.Read(f)
-	if errors.Is(err, object.ErrObjectNotFound) {
+	if err == object.ErrObjectNotFound {
 		return errors.New("file not exist")
+
 	}
 	if err != nil {
 		return fmt.Errorf("object.Read: %w", err)
-	}
-
-	s, err := f.Stat()
-	if err != nil {
-		return fmt.Errorf("file stat failed: %w", err)
-	}
-	if s.Size() == 0 {
-		return errors.New("file not exist")
 	}
 
 	return nil
