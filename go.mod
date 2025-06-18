@@ -1,10 +1,10 @@
-module github.com/nextbillion-ai/yog
+module src.nextbillion.io/map/yog
 
 go 1.21
 
 require (
 	cloud.google.com/go/storage v1.31.0
-	github.com/nextbillion-ai/gsg v1.0.17
+	github.com/nextbillion-ai/gsg v1.0.7
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.8.1
 )
@@ -50,7 +50,6 @@ require (
 	golang.org/x/oauth2 v0.8.0 // indirect
 	golang.org/x/sys v0.13.0 // indirect
 	golang.org/x/text v0.13.0 // indirect
-	golang.org/x/time v0.0.0-20191024005414-555d28b269f0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/api v0.126.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
