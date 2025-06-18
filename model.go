@@ -15,7 +15,7 @@ type MatrixElement struct {
 }
 
 type Value struct {
-	Value uint32 `json:"value"`
+	Value int32 `json:"value"`
 }
 
 /*
@@ -47,6 +47,7 @@ const (
 type TaskMeta struct {
 	Index      map[string]IndexItem `json:"index"`
 	MatrixInfo MatrixInfo           `json:"matrix_info,omitempty"`
+	version    int                  // 记录版本
 }
 
 type IndexItem struct {
