@@ -11,6 +11,11 @@ import (
 	"strings"
 )
 
+const (
+	Uint32Binary int = iota
+	Int32Binary
+)
+
 type Yog struct {
 	taskID     string // 方舟接口返回的
 	path       string // 我们把 gsg 文件下载到哪里
@@ -201,6 +206,7 @@ type page struct {
 	originalIndex IndexItem
 	start         int
 	end           int
+	version       int // 记录版本
 }
 
 func (p *page) read() ([]byte, error) {
@@ -238,7 +244,7 @@ func (y *Yog) Reset() {
 
 // ReadChunk read a chunk of data in order
 // i = o * d.length + d
-func (y *Yog) ReadChunk(chunkSize int) (durations []uint32, distances []uint32, err error) {
+func (y *Yog) ReadChunk(chunkSize int) (durations []int32, distances []int32, err error) {
 
 	if y.offset+chunkSize > y.taskMeta.MatrixInfo.OriginCount*y.taskMeta.MatrixInfo.DestinationCount {
 		chunkSize = y.taskMeta.MatrixInfo.OriginCount*y.taskMeta.MatrixInfo.DestinationCount - y.offset
@@ -264,12 +270,13 @@ func (y *Yog) ReadChunk(chunkSize int) (durations []uint32, distances []uint32, 
 			start:         startOffset,
 			end:           endOffset,
 			status:        indexData.Status,
+			version:       y.taskMeta.Version,
 		})
 	}
 
 	// allocate space
-	durations = make([]uint32, chunkSize)
-	distances = make([]uint32, chunkSize)
+	durations = make([]int32, chunkSize)
+	distances = make([]int32, chunkSize)
 
 	// fill the data in order
 	for _, p := range pages {
@@ -278,14 +285,30 @@ func (y *Yog) ReadChunk(chunkSize int) (durations []uint32, distances []uint32, 
 			return nil, nil, fmt.Errorf("read chunk failed %v", err)
 		}
 
-		chunkDurations, chunkDistances, err := decodeChunk(data)
-		if err != nil {
-			return nil, nil, fmt.Errorf("decode binary chunk failed %v", err)
+		var chunkDurations, chunkDistances []int32
+		switch y.taskMeta.Version {
+		case Int32Binary:
+			var serializer Int32BinarySerializer
+			chunkDurations, chunkDistances, err = serializer.decodeChunk(data)
+			if err != nil {
+				return nil, nil, fmt.Errorf("decode binary chunk failed %v", err)
+			}
+		case Uint32Binary:
+			var serializer Uint32BinarySerializer
+			uintChunkDurations, uintchunkDistances, err := serializer.decodeChunk(data)
+			if err != nil {
+				return nil, nil, fmt.Errorf("decode binary chunk failed %v", err)
+			}
+			for _, duration := range uintChunkDurations {
+				chunkDurations = append(chunkDurations, int32(duration))
+			}
+			for _, distance := range uintchunkDistances {
+				chunkDistances = append(chunkDistances, int32(distance))
+			}
 		}
 
 		for i := 0; i < p.end-p.start+1; i++ {
 			ir := p.originalIndex.Offset[p.start+i] - y.offset
-
 			durations[ir] = chunkDurations[i]
 			distances[ir] = chunkDistances[i]
 		}
@@ -312,7 +335,7 @@ func findSubset(min, max int, array []int) (int, int) {
 }
 
 // Read the data with the specified index
-func (y *Yog) Read(o, d int) (duration uint32, distance uint32, err error) {
+func (y *Yog) Read(o, d int) (duration int32, distance int32, err error) {
 
 	var p page
 	oindex, dindex := -1, -1
@@ -342,7 +365,17 @@ func (y *Yog) Read(o, d int) (duration uint32, distance uint32, err error) {
 		return 0, 0, fmt.Errorf("read chunk failed %v", err)
 	}
 
-	return decode(data)
+	switch y.taskMeta.Version {
+	case Int32Binary:
+		var serializer Int32BinarySerializer
+		return serializer.decode(data)
+	case Uint32Binary:
+		var serializer Uint32BinarySerializer
+		uDuration, uDistance, err := serializer.decode(data)
+		return int32(uDuration), int32(uDistance), err
+	default:
+		return 0, 0, fmt.Errorf("version shouldn`t be %v", y.taskMeta.Version)
+	}
 }
 
 // MatrixInfo get MatrixInfo from meta
@@ -366,4 +399,90 @@ func (y *Yog) Clear() error {
 		return fmt.Errorf("remove index file failed %v", err)
 	}
 	return nil
+}
+
+// encode MatrixInfo Result -> binary i = o * d.length + d
+func Encode(data string) ([]byte, error) {
+
+	var serializer Int32BinarySerializer
+
+	var resp MatrixData
+	err := json.Unmarshal([]byte(data), &resp)
+	if err != nil {
+		return nil, err
+	}
+
+	header, err := serializer.encode(int32(len(resp.Rows)), int32(len(resp.Rows[0].Elements)))
+	if err != nil {
+		return nil, err
+	}
+
+	// 将 MatrixData.Rows 转化成 binary
+	res := make([]byte, 0)
+
+	// add header
+	res = append(res, header...)
+
+	// source index
+	for _, row := range resp.Rows {
+		// destination index
+		for _, element := range row.Elements {
+			chunk, err := serializer.encode(element.Duration.Value, element.Distance.Value)
+			if err != nil {
+				return nil, err
+			}
+			res = append(res, chunk...)
+		}
+	}
+	return res, nil
+}
+
+// decode binary -> MatrixInfo Result
+func Decode(bin []byte) (string, error) {
+
+	var serializer Int32BinarySerializer
+
+	// check data
+	if len(bin)%8 > 0 {
+		return "", errors.New("illegal binary data format")
+	}
+
+	//read header
+	sourceLength, destinationLength, err := serializer.decode(bin[0:8])
+	if err != nil {
+		return "", errors.New("binary header decode failed")
+	}
+	bin = bin[8:]
+
+	// resize result
+	var m MatrixData
+	m.Rows = make([]MatrixRow, sourceLength)
+	for i := range m.Rows {
+		m.Rows[i].Elements = make([]MatrixElement, destinationLength)
+	}
+
+	// decode
+	for i := 0; i < len(bin); i = i + 8 {
+		duration, distance, err := serializer.decode(bin[i : i+8])
+		if err != nil {
+			return "", errors.New("binary decode failed")
+		}
+
+		n := int32(i / 8)
+		var d = n % destinationLength
+		var s = (n - d) / destinationLength
+		//fmt.Println(fmt.Sprintf("s=%v, d=%v", s, d))
+
+		m.Rows[s].Elements[d] = MatrixElement{
+			Distance: Value{distance},
+			Duration: Value{duration},
+		}
+	}
+
+	marshal, err := json.Marshal(m)
+	if err != nil {
+		return "", err
+	}
+
+	return string(marshal), nil
 }
