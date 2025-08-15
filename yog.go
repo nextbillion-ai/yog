@@ -244,7 +244,7 @@ func (y *Yog) Reset() {
 
 // ReadChunk read a chunk of data in order
 // i = o * d.length + d
-func (y *Yog) ReadChunk(chunkSize int) (durations []uint32, distances []uint32, err error) {
+func (y *Yog) ReadChunk(chunkSize int) (durations []int32, distances []int32, err error) {
 
 	if y.offset+chunkSize > y.taskMeta.MatrixInfo.OriginCount*y.taskMeta.MatrixInfo.DestinationCount {
 		chunkSize = y.taskMeta.MatrixInfo.OriginCount*y.taskMeta.MatrixInfo.DestinationCount - y.offset
@@ -275,8 +275,8 @@ func (y *Yog) ReadChunk(chunkSize int) (durations []uint32, distances []uint32, 
 	}
 
 	// allocate space
-	durations = make([]uint32, chunkSize)
-	distances = make([]uint32, chunkSize)
+	durations = make([]int32, chunkSize)
+	distances = make([]int32, chunkSize)
 
 	// fill the data in order
 	for _, p := range pages {
@@ -285,25 +285,25 @@ func (y *Yog) ReadChunk(chunkSize int) (durations []uint32, distances []uint32, 
 			return nil, nil, fmt.Errorf("read chunk failed %v", err)
 		}
 
-		var chunkDurations, chunkDistances []uint32
+		var chunkDurations, chunkDistances []int32
 		switch y.taskMeta.Version {
 		case Int32Binary:
 			var serializer Int32BinarySerializer
-			intChunkDurations, intchunkDistances, err := serializer.decodeChunk(data)
-			if err != nil {
-				return nil, nil, fmt.Errorf("decode binary chunk failed %v", err)
-			}
-			for _, duration := range intChunkDurations {
-				chunkDurations = append(chunkDurations, uint32(duration))
-			}
-			for _, distance := range intchunkDistances {
-				chunkDistances = append(chunkDistances, uint32(distance))
-			}
-		case Uint32Binary:
-			var serializer Uint32BinarySerializer
 			chunkDurations, chunkDistances, err = serializer.decodeChunk(data)
 			if err != nil {
 				return nil, nil, fmt.Errorf("decode binary chunk failed %v", err)
+			}
+		case Uint32Binary:
+			var serializer Uint32BinarySerializer
+			uintChunkDurations, uintchunkDistances, err := serializer.decodeChunk(data)
+			if err != nil {
+				return nil, nil, fmt.Errorf("decode binary chunk failed %v", err)
+			}
+			for _, duration := range uintChunkDurations {
+				chunkDurations = append(chunkDurations, int32(duration))
+			}
+			for _, distance := range uintchunkDistances {
+				chunkDistances = append(chunkDistances, int32(distance))
 			}
 		}
 
@@ -335,7 +335,7 @@ func findSubset(min, max int, array []int) (int, int) {
 }
 
 // Read the data with the specified index
-func (y *Yog) Read(o, d int) (duration uint32, distance uint32, err error) {
+func (y *Yog) Read(o, d int) (duration int32, distance int32, err error) {
 
 	var p page
 	oindex, dindex := -1, -1
@@ -366,13 +366,13 @@ func (y *Yog) Read(o, d int) (duration uint32, distance uint32, err error) {
 	}
 
 	switch y.taskMeta.Version {
-	case Uint32Binary:
-		var serializer Uint32BinarySerializer
-		return serializer.decode(data)
 	case Int32Binary:
 		var serializer Int32BinarySerializer
+		return serializer.decode(data)
+	case Uint32Binary:
+		var serializer Uint32BinarySerializer
 		uDuration, uDistance, err := serializer.decode(data)
-		return uint32(uDuration), uint32(uDistance), err
+		return int32(uDuration), int32(uDistance), err
 	default:
 		return 0, 0, fmt.Errorf("version shouldn`t be %v", y.taskMeta.Version)
 	}
