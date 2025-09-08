@@ -1,10 +1,12 @@
 module github.com/nextbillion-ai/yog
 
-go 1.21
+go 1.22
+
+toolchain go1.22.2
 
 require (
 	cloud.google.com/go/storage v1.31.0
-	github.com/nextbillion-ai/gsg v1.0.17
+	github.com/nextbillion-ai/gsg v1.0.28
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.8.1
 )

@@ -95,7 +95,7 @@ func (y *Yog) Load() error {
 	}
 
 	for chunkFileName, chunkInfo := range y.taskMeta.Index {
-		err := y.storage.DownloadSingleFile(ctx, chunkFileName, y.path)
+		err = y.storage.DownloadSingleFile(ctx, chunkFileName, y.path)
 		if err != nil {
 			if err.Error() == "file not exist" {
 				chunkInfo.Status = FFailed
@@ -104,6 +104,15 @@ func (y *Yog) Load() error {
 			}
 			return fmt.Errorf("chunk file download failed filename:%v error:%v", chunkFileName, err)
 		}
+
+		chunkFilePath := y.path + chunkFileName
+		size := fileSize(chunkFilePath)
+		if size <= HEADER_LENGTH {
+			chunkInfo.Status = FFailed
+			y.taskMeta.Index[chunkFileName] = chunkInfo
+			continue
+		}
+
 		chunkInfo.Status = FSucceeded
 		y.taskMeta.Index[chunkFileName] = chunkInfo
 	}
@@ -114,7 +123,7 @@ func (y *Yog) Load() error {
 func (y *Yog) Check() error {
 
 	// check meta.json exist
-	metaFilePath := y.path + "/" + META_FILE_NAME
+	metaFilePath := y.path + META_FILE_NAME
 	if !fileExists(metaFilePath) {
 		return errors.New("meta file does not exist")
 	}
@@ -141,7 +150,7 @@ func (y *Yog) Check() error {
 	}
 
 	for chunkName, chunkInfo := range y.taskMeta.Index {
-		chunkPath := y.path + "/" + chunkName
+		chunkPath := y.path + chunkName
 		if !fileExists(chunkPath) {
 			chunkInfo.Status = FFailed
 		} else {
@@ -263,7 +272,7 @@ func (y *Yog) ReadChunk(chunkSize int) (durations []int32, distances []int32, er
 		}
 
 		pages = append(pages, page{
-			file:          y.path + "/" + indexName,
+			file:          y.path + indexName,
 			offset:        int64(startOffset*8 + HEADER_LENGTH),
 			length:        int64(endOffset-startOffset+1) * 8,
 			originalIndex: indexData,
@@ -352,7 +361,7 @@ func (y *Yog) Read(o, d int) (duration int32, distance int32, err error) {
 		}
 
 		if oindex >= 0 && dindex >= 0 {
-			p.file = y.path + "/" + indexName
+			p.file = y.path + indexName
 			p.offset = int64(oindex*len(indexData.Destination)+dindex)*8 + HEADER_LENGTH
 			p.length = 8
 			p.status = indexData.Status
