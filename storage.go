@@ -31,7 +31,7 @@ type GSGClient struct {
 }
 
 // DownloadSingleFile gs://nb-data/mdm/test/d111ae24-0f3e-3617-b64d-ca9ae0243c7c/0
-func (g *GSGClient) DownloadSingleFile(ctx context.Context, objectName string, path string) (err error) {
+func (g *GSGClient) DownloadSingleFile(ctx context.Context, objectName string, path string) error {
 	if path != "" && path[len(path)-1] != '/' {
 		path = path + "/"
 	}
@@ -54,11 +54,10 @@ func (g *GSGClient) DownloadSingleFile(ctx context.Context, objectName string, p
 	}()
 
 	err = gsgObject.Read(f)
-	if err == object.ErrObjectNotFound {
-		return errors.New("file not exist")
-
-	}
 	if err != nil {
+		if errors.Is(err, object.ErrObjectNotFound) {
+			return errors.New("file not exist")
+		}
 		return fmt.Errorf("object.Read: %w", err)
 	}
 
@@ -108,7 +107,7 @@ func (g *GCSClient) DownloadSingleFile(ctx context.Context, objectName string, p
 
 	_, err := g.Client.Bucket(g.Bucket).Object(g.Prefix + "/" + objectName).Attrs(ctx)
 	if err != nil {
-		if err == storage.ErrObjectNotExist {
+		if errors.Is(err, storage.ErrObjectNotExist) {
 			return errors.New("file not exist")
 		}
 		return fmt.Errorf("check remote storage failed bucket:%v object:%v err:%v", g.Bucket, g.Prefix+"/"+objectName, err)
