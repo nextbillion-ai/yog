@@ -124,8 +124,8 @@ github.com/jmespath/go-jmespath v0.4.0 h1:BEgLn5cpjn8UN1mAw4NjwDrS35OdebyEtFe+9Y
 github.com/jmespath/go-jmespath v0.4.0/go.mod h1:T8mJZnbsbmF+m6zOOFylbeCJqk5+pHWvzYPziyZiYoo=
 github.com/jmespath/go-jmespath/internal/testify v1.5.1 h1:shLQSRRSCCPj3f2gpwzGwWFoC7ycTf1rcQZHOlsJ6N8=
 github.com/jmespath/go-jmespath/internal/testify v1.5.1/go.mod h1:L3OGu8Wl2/fWfCI6z80xFu9LTZmf1ZRjMHUOPmWr69U=
-github.com/nextbillion-ai/gsg v1.0.34 h1:lflQ8R2gZ6yJwM6HekkJ72nYdQXVh4oa5e3TyfB8o4E=
-github.com/nextbillion-ai/gsg v1.0.34/go.mod h1:1/v9n8v3JEkbjGoa71aMNGBj7GM6SVcGOju/5L3XlXg=
+github.com/nextbillion-ai/gsg v1.0.35 h1:xAW8BnM4i7s5IyxXceTTuaLokiw5I5r15aoMtU5lC1w=
+github.com/nextbillion-ai/gsg v1.0.35/go.mod h1:1/v9n8v3JEkbjGoa71aMNGBj7GM6SVcGOju/5L3XlXg=
 github.com/nxadm/tail v1.4.4/go.mod h1:kenIhsEOeOJmVchQTgglprH7qJGnHDVpk1VPCcaMI8A=
 github.com/nxadm/tail v1.4.8 h1:nPr65rt6Y5JFSKQO7qToXr7pePgD6Gwiw05lkbyAQTE=
 github.com/nxadm/tail v1.4.8/go.mod h1:+ncqLTQzXmGhMZNUePPaPqPvBxHAIsmXswZKocGu+AU=

@@ -6,7 +6,7 @@ toolchain go1.22.2
 
 require (
 	cloud.google.com/go/storage v1.31.0
-	github.com/nextbillion-ai/gsg v1.0.34
+	github.com/nextbillion-ai/gsg v1.0.35
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.8.4
 )
