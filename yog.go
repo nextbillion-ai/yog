@@ -26,14 +26,47 @@ type Yog struct {
 	storage    ICloudStorage
 }
 
-func removeGsorS3Prefix(outputAddr string) string {
-	outputAddr = strings.TrimPrefix(outputAddr, "gs://")
-	outputAddr = strings.TrimPrefix(outputAddr, "s3://")
+// removeSchemePrefix reduces an object-store address to "bucket/prefix".
+//
+// The result is used two ways: as the host and path of an HTTPS URL, and as the
+// bucket/prefix split handed to a storage client. Both want the same thing -- the
+// address with everything that identifies a backend rather than an object taken off.
+//
+// oci:// carries one such extra part. gsg addresses an OCI bucket as "bucket@region",
+// or "bucket@namespace.region", because unlike gs:// and s3:// a bucket name alone
+// does not say which copy of that name is meant. That qualifier belongs to the
+// backend, not to the object, so it comes off here with the scheme. Without this the
+// address keeps its "oci://" and an HTTPS URL is built as "https://oci://bucket@..." --
+// a string that no request can reach and that no error names.
+func removeSchemePrefix(outputAddr string) string {
+	for _, scheme := range []string{"gs://", "s3://", "oci://"} {
+		if rest, ok := strings.CutPrefix(outputAddr, scheme); ok {
+			if scheme == "oci://" {
+				rest = dropBucketQualifier(rest)
+			}
+			return rest
+		}
+	}
 	return outputAddr
 }
 
+// dropBucketQualifier removes the "@namespace.region" an oci:// authority carries.
+//
+// The authority is the first path segment, so the qualifier is bounded by the first
+// "/" -- an "@" later in the address is part of an object name and is left alone.
+func dropBucketQualifier(addr string) string {
+	bucket, prefix, hasPrefix := strings.Cut(addr, "/")
+	if at := strings.LastIndex(bucket, "@"); at >= 0 {
+		bucket = bucket[:at]
+	}
+	if !hasPrefix {
+		return bucket
+	}
+	return bucket + "/" + prefix
+}
+
 func NewInternal(taskID string, path string, outputAddr string, apiKeyPath string) *Yog {
-	outputAddrWithoutPrefix := removeGsorS3Prefix(outputAddr)
+	outputAddrWithoutPrefix := removeSchemePrefix(outputAddr)
 	arrays := strings.Split(outputAddrWithoutPrefix, "/")
 	return &Yog{
 		taskID:  taskID,
@@ -48,7 +81,7 @@ func New(taskID string, path string, outputAddr string) *Yog {
 	if path != "" && path[len(path)-1] != '/' {
 		path = path + "/"
 	}
-	outputAddr = "https://" + removeGsorS3Prefix(outputAddr)
+	outputAddr = "https://" + removeSchemePrefix(outputAddr)
 	return &Yog{
 		taskID:  taskID,
 		path:    path,
