@@ -24,29 +24,8 @@ func fileSize(filePath string) int {
 	return -1
 }
 
-func bufferReaderFile(path string, bufferSize int) ([]byte, error) {
-	file, err := os.OpenFile(path, os.O_RDONLY, os.ModePerm)
-	if err != nil {
-		return nil, err
-	}
-	length := 0
-	fileContent := make([]byte, 0)
-	b := make([]byte, bufferSize)
-	for {
-		n, err := file.Read(b)
-		length += n
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-		fileContent = append(fileContent, b...)
-	}
-	if err != nil {
-		return nil, err
-	}
-	return fileContent[:length], nil
+func bufferReaderFile(path string, _ int) ([]byte, error) {
+	return os.ReadFile(path)
 }
 
 func readByteByOffsetLength(fileName string, offset, length int64) ([]byte, error) {
