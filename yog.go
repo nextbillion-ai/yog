@@ -1,13 +1,14 @@
 package yog
 
 import (
-	"bufio"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -17,13 +18,14 @@ const (
 )
 
 type Yog struct {
-	taskID     string // 方舟接口返回的
-	path       string // 我们把 gsg 文件下载到哪里
-	apiKey     string // google key
-	offset     int    // 记录读数据进度
-	outputAddr string
-	taskMeta   TaskMeta
-	storage    ICloudStorage
+	taskID        string // 方舟接口返回的
+	path          string // 我们把 gsg 文件下载到哪里
+	apiKey        string // google key
+	offset        int    // 记录读数据进度
+	outputAddr    string
+	taskMeta      TaskMeta
+	storage       ICloudStorage
+	sortedOffsets map[string]bool
 }
 
 // removeSchemePrefix reduces an object-store address to "bucket/prefix".
@@ -172,6 +174,8 @@ func (y *Yog) Check() error {
 	}
 
 	// meta.json unmarshal TaskMeta
+	// Unmarshal can replace offsets, even partially on error; invalidate their ordering.
+	y.sortedOffsets = nil
 	err = json.Unmarshal(metaContent, &y.taskMeta)
 	if err != nil {
 		return fmt.Errorf("meta file illegal file format %v", err)
@@ -207,7 +211,6 @@ func (y *Yog) ReloadMeta() error {
 
 	oc, dc := 0, 0
 	for _, data := range y.taskMeta.Index {
-		data.Offset = []int{}
 		for _, o := range data.Origin {
 			if oc < o {
 				oc = o
@@ -223,13 +226,16 @@ func (y *Yog) ReloadMeta() error {
 	y.taskMeta.MatrixInfo.OriginCount = oc + 1
 	y.taskMeta.MatrixInfo.DestinationCount = dc + 1
 
+	y.sortedOffsets = make(map[string]bool, len(y.taskMeta.Index))
 	for i, data := range y.taskMeta.Index {
+		data.Offset = make([]int, 0, len(data.Origin)*len(data.Destination))
 		for _, o := range data.Origin {
 			for _, d := range data.Destination {
 				data.Offset = append(data.Offset, o*y.taskMeta.MatrixInfo.DestinationCount+d)
 			}
 		}
 		y.taskMeta.Index[i] = data
+		y.sortedOffsets[i] = sort.IntsAreSorted(data.Offset)
 	}
 
 	// check meta data
@@ -241,6 +247,7 @@ func (y *Yog) ReloadMeta() error {
 }
 
 type page struct {
+	ordered       bool
 	status        FileState
 	file          string
 	offset        int64
@@ -270,9 +277,8 @@ func (p *page) read() ([]byte, error) {
 		return nil, err
 	}
 
-	bufReader := bufio.NewReader(file)
 	block := make([]byte, p.length)
-	_, err = bufReader.Read(block)
+	_, err = file.Read(block)
 	if err != nil {
 		return nil, err
 	}
@@ -299,12 +305,18 @@ func (y *Yog) ReadChunk(chunkSize int) (durations []int32, distances []int32, er
 	var pages = make([]page, 0)
 	for indexName, indexData := range y.taskMeta.Index {
 
-		startOffset, endOffset := findSubset(y.offset, y.offset+chunkSize-1, indexData.Offset)
+		var startOffset, endOffset int
+		if y.sortedOffsets[indexName] {
+			startOffset, endOffset = findSortedSubset(y.offset, y.offset+chunkSize-1, indexData.Offset)
+		} else {
+			startOffset, endOffset = findSubset(y.offset, y.offset+chunkSize-1, indexData.Offset)
+		}
 		if startOffset < 0 || endOffset < 0 {
 			continue
 		}
 
 		pages = append(pages, page{
+			ordered:       y.sortedOffsets[indexName],
 			file:          y.path + indexName,
 			offset:        int64(startOffset*8 + HEADER_LENGTH),
 			length:        int64(endOffset-startOffset+1) * 8,
@@ -325,6 +337,17 @@ func (y *Yog) ReadChunk(chunkSize int) (durations []int32, distances []int32, er
 		data, err := p.read()
 		if err != nil {
 			return nil, nil, fmt.Errorf("read chunk failed %v", err)
+		}
+
+		// The fast path is restricted to ordered offsets and existing formats.
+		// Other cases retain the original decoding and scatter behavior.
+		if p.ordered && (y.taskMeta.Version == Int32Binary || y.taskMeta.Version == Uint32Binary) {
+			for i := 0; i <= p.end-p.start; i++ {
+				ir := p.originalIndex.Offset[p.start+i] - y.offset
+				durations[ir] = int32(binary.LittleEndian.Uint32(data[i*8:]))
+				distances[ir] = int32(binary.LittleEndian.Uint32(data[i*8+4:]))
+			}
+			continue
 		}
 
 		var chunkDurations, chunkDistances []int32
@@ -358,6 +381,17 @@ func (y *Yog) ReadChunk(chunkSize int) (durations []int32, distances []int32, er
 
 	y.offset += chunkSize
 	return durations, distances, err
+}
+
+// findSortedSubset is used only after ReloadMeta has checked ordering.
+// Do not sort the offsets: their positions correspond to on-disk records.
+func findSortedSubset(min, max int, array []int) (int, int) {
+	begin := sort.SearchInts(array, min)
+	end := sort.Search(len(array), func(i int) bool { return array[i] > max })
+	if begin >= end {
+		return -1, -1
+	}
+	return begin, end - 1
 }
 
 func findSubset(min, max int, array []int) (int, int) {
@@ -460,7 +494,11 @@ func Encode(data string) ([]byte, error) {
 	}
 
 	// 将 MatrixData.Rows 转化成 binary
-	res := make([]byte, 0)
+	size := HEADER_LENGTH
+	for _, row := range resp.Rows {
+		size += len(row.Elements) * 8
+	}
+	res := make([]byte, 0, size)
 
 	// add header
 	res = append(res, header...)
@@ -469,11 +507,10 @@ func Encode(data string) ([]byte, error) {
 	for _, row := range resp.Rows {
 		// destination index
 		for _, element := range row.Elements {
-			chunk, err := serializer.encode(element.Duration.Value, element.Distance.Value)
-			if err != nil {
-				return nil, err
-			}
-			res = append(res, chunk...)
+			offset := len(res)
+			res = res[:offset+8]
+			binary.LittleEndian.PutUint32(res[offset:], uint32(element.Duration.Value))
+			binary.LittleEndian.PutUint32(res[offset+4:], uint32(element.Distance.Value))
 		}
 	}
 	return res, nil

@@ -3,7 +3,7 @@ name: lint
 on:
   push:
     branches:
-      - "*" # Trigger the workflow on any branch push
+      - "**"
 
 jobs:
   test:
@@ -12,8 +12,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: lint and test
-        run: |
-          #!/bin/bash
-          golangci-lint run
-          go test ./...
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.24.12"
+          # Self-hosted runners retain local caches; avoid uploading shared caches.
+          cache: false
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version-file: .golangci-lint-version
+          args: --allow-serial-runners
+          skip-cache: true
+
+      - name: Test
+        run: go test ./...

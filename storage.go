@@ -12,6 +12,7 @@ import (
 	"cloud.google.com/go/storage"
 	"github.com/nextbillion-ai/gsg/lib/object"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/api/option"
 )
 
 type ICloudStorage interface {
@@ -64,7 +65,8 @@ func (g *GSGClient) DownloadSingleFile(ctx context.Context, objectName string, p
 	return nil
 }
 
-//export GOOGLE_APPLICATION_CREDENTIALS="/Users/xurui/Workspace/env/dcsa.json"
+// NewGCSClient uses APIKey as a client-local credentials file. When it is empty,
+// the GCS backend uses application-default credentials.
 func NewGCSClient(bucket, prefix, APIKey, fullpath string) ICloudStorage {
 	useGSG := os.Getenv("USE_GSG") == "true"
 	if useGSG {
@@ -79,14 +81,11 @@ func NewGCSClient(bucket, prefix, APIKey, fullpath string) ICloudStorage {
 		}
 	}
 
+	var options []option.ClientOption
 	if APIKey != "" {
-		err := os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", APIKey)
-		if err != nil {
-			panic(fmt.Sprintf("failed to init storage.NewClient: %s", err.Error()))
-		}
+		options = append(options, option.WithCredentialsFile(APIKey))
 	}
-
-	client, err := storage.NewClient(context.Background())
+	client, err := storage.NewClient(context.Background(), options...)
 	if err != nil {
 		panic(fmt.Sprintf("failed to init storage.NewClient: %s", err.Error()))
 	}
